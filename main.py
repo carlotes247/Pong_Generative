@@ -3,30 +3,89 @@ import kivy
 from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.textinput import TextInput
+from kivy.properties import (NumericProperty, ReferenceListProperty, ObjectProperty)
+from kivy.vector import Vector
+from kivy.clock import Clock
+from random import randint
 
-# Used for drawing?
+# Logic for the pong paddle
+class PongPaddle(Widget):
+    score = NumericProperty(0)
+
+    def bounce_ball(self, ball):
+        if self.collide_widget(ball):
+            vx, vy = ball.velocity
+            offset = (ball.center_y - self.center_y) / (self.height / 2)
+            bounced = Vector(-1 * vx, vy)
+            vel = bounced *1.1            
+            ball.velocity = vel.x, vel.y + offset
+
+# Logic for the pong ball
+class PongBall(Widget):
+    # Velocity of the ball in x and y axis
+    velocity_x = NumericProperty(0)
+    velocity_y = NumericProperty(0)
+    # referencelist property so we can use ball.velocity as
+    # a shorthand, just like e.g. w.pos for w.x and w.y
+    velocity = ReferenceListProperty(velocity_x, velocity_y)
+    # ``move`` function will move the ball one step. This
+    #  will be called in equal intervals to animate the ball
+    def move(self):
+        self.pos = Vector(*self.velocity) + self.pos
+
+# Logic of the pongGame
 class PongGame(Widget):
-    pass
+    ball = ObjectProperty(None)
+    player1 = ObjectProperty(None)
+    player2 = ObjectProperty(None)
+
+    # Input handling
+    def on_touch_move(self, touch):
+        # Left part of the screen
+        if touch.x < self.width/3:
+            self.player1.center_y = touch.y
+        # Right part of the screen
+        if touch.x > self.width - self.width/3:
+            self.player2.center_y = touch.y
+    
+    # gives it an initial push to move the ball
+    def serve_ball(self, vel=(4,0)):
+        self.ball.center = self.center
+        self.ball.velocity = vel
+    
+    # Update logic called once every 60 frames
+    def update(self, dt):
+        self.ball.move()
+
+        # bounce off ball from paddles
+        self.player1.bounce_ball(self.ball)
+        self.player2.bounce_ball(self.ball)
+
+        # bounce off top or bottom
+        if  (self.ball.y < self.y) or (self.ball.top > self.top):
+            self.ball.velocity_y *= -1
+
+        # went off to a side to score point?
+        if self.ball.x < self.x:
+            self.player2.score += 1
+            self.serve_ball(vel=(4,0))
+        if self.ball.x > self.width:
+            self.player1.score += 1
+            self.serve_ball(vel=(-4, 0))    
+
+
 
 # The pong game class (contains the run event)
 class PongApp(App):
     def build(self):
-        return PongGame()
-
-class LoginScreen(GridLayout):
-    def __init__(self, **kwargs):
-        super(LoginScreen, self).__init__(**kwargs)
-        self.cols = 2
-        self.add_widget(Label(text='User Name'))
-        self.username = TextInput(multiline=False)
-        self.add_widget(self.username)
-        self.add_widget(Label(text='password'))
-        self.password = TextInput(password=True, multiline=False)
-        self.add_widget(self.password)
+        game = PongGame()
+        game.serve_ball()
+        Clock.schedule_interval(game.update, 1.0/60.0)
+        return game
 
 
+# Name is __main__ since we are in the main.py file
 if __name__ == '__main__':
+    # Need to define the pong app as a variable or I get an error when calling run()
     m_Game=PongApp()
     m_Game.run()
